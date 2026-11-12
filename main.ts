@@ -15,7 +15,7 @@ const INPUT_DIR = process.env.MAKEFUN_INPUT_DIR ?? '/input';
 const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
 // Tunable constants, on one line so a backtest script can swap them.
-const PARAMS = { velWindow: 4, velShrink: 0.8, velCap: 0.5, dampDiv: 4, revDiv: 6, youngPull: 0.05, termCap: 1.0, sigA: 0.25, sigB: 0.1, sigScale: 1.0, youngSig: 0.15, curveSig: 0.1, volCap: 0.2, extraScale: 2, shared0: 0.03, shared1: 0.07, nameSum: 0.68, minP: 0.005, sizeSum: 0.93, sizeKernel: 2, sizeMix: 0.2, sizeA: 0.2, sizeB: 0.1, placeShrink: 0.6, placeCap: 1.0, draws: 8000, candMean: 60, candCap: 30, candMax: 80, seed: 20261112 };
+const PARAMS = { velWindow: 4, velShrink: 0.8, velCap: 0.5, dampDiv: 8, revDiv: 6, youngPull: 0.05, termCap: 1.0, sigA: 0.28, sigB: 0.1, sigScale: 1.0, youngSig: 0.15, curveSig: 0.1, volCap: 0.2, extraScale: 2, shared0: 0.03, shared1: 0.07, nameSum: 0.68, minP: 0.005, sizeSum: 0.95, sizeKernel: 2, sizeMix: 0, sizeA: 0.2, sizeB: 0.1, placeShrink: 1.0, placeCap: 1.0, draws: 8000, candMean: 80, candCap: 30, candMax: 80, seed: 20261112 };
 const P = PARAMS;
 const MICRO = 1_000_000;
 
@@ -181,9 +181,11 @@ const order = C.map((c, i) => ({ c, t5: top5Count[i]! })).sort((a, b) => b.c.mea
 const top5 = order.slice(0, PLACES).map((o) => o.c.mint);
 if (top5.length < PLACES) console.error(`warning: only ${top5.length} coins seen, top5 is short`);
 
-// Sizes: a mixture of (a) the MC distribution of the cap at each place, smoothed over neighbouring bins, and (b) a
-// normal around the place-k cap series' own damped trend (the k-th largest cap at each mark is observable and carries
-// the market-wide drift the per-coin model misses: new coins overtaking the leaders).
+// Sizes (v2): a normal around the place-k cap series' own damped trend (the k-th largest cap at each mark is observable
+// and carries the market-wide drift the per-coin model misses: new coins overtaking the leaders). v1 mixed in 20%
+// of the Monte Carlo place-cap distribution, but backtests showed the MC part is too wide and dilutes the size score
+// on both protocols, so v2 uses the trend normal alone (sizeMix 0). The trend is no longer shrunk (placeShrink 1.0):
+// backtests showed the v1 shrink under-extrapolated the steady drift, especially at the longer horizon.
 function wslope(pts: Obs[]): number {
   const n = pts.length;
   if (n < 2) return 0;
